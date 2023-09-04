@@ -1,0 +1,7 @@
+  load time =    78.94 ms
+  fallbacks =   0 p /   0 h
+   mel time =    41.32 ms
+sample time =    10.63 ms /    25 runs (    0.43 ms per run)
+encode time =   271.35 ms /     1 runs (  271.35 ms per run)
+decode time =    36.95 ms /    25 runs (    1.48 ms per run)
+ total time =   450.66 ms

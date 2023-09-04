@@ -292,6 +292,24 @@ for key in tokens:
     fout.write(struct.pack("i", len(key)))
     fout.write(key)
 
+list_vars["decoder.token_embedding.weight.trans"] = list_vars["decoder.token_embedding.weight"]
+print(list_vars["decoder.token_embedding.weight.trans"])
+
+weights_to_transpose = (
+    "attn.query.weight",
+    "attn.key.weight",
+    "attn.value.weight",
+    "attn.out.weight",
+    "cross_attn.query.weight",
+    "cross_attn.key.weight",
+    "cross_attn.value.weight",
+    "cross_attn.out.weight",
+    "mlp.0.weight",
+    "mlp.2.weight",
+    "token_embedding.weight.trans",
+)
+
+
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
     print("Processing variable: " , name ,  " with shape: ", data.shape)
@@ -319,12 +337,22 @@ for name in list_vars.keys():
     else:
         data = data.astype(np.float32)
         ftype = 0
+    
+    if name.endswith(weights_to_transpose):
+        print("  Transposing")
+        data = np.transpose(data)
+    
+    #pad token embedding
+    if name == "decoder.token_embedding.weight":
+        print("Shape before padding: ", data.shape)
+        data = np.pad(data, ((0, 3), (0, 0)), 'constant', constant_values=0)
+        print("Shape after padding: ", data.shape)
 
-    #if name.startswith("encoder"):
-    #    if name.endswith("mlp.0.weight") or \
-    #       name.endswith("mlp.2.weight"):
-    #        print("  Transposing")
-    #        data = data.transpose()
+    if name == "decoder.token_embedding.weight.trans":
+        print("Shape before padding: ", data.shape)
+        data = np.pad(data, ((0, 0), (0, 3)), 'constant', constant_values=0)
+        print("Shape after padding: ", data.shape)
+
 
     # header
     str_ = name.encode('utf-8')
