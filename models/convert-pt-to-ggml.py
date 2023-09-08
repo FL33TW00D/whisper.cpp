@@ -337,6 +337,7 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
+    "token_embedding.weight.trans",
 )
 
 weights_to_transpose = (
@@ -353,7 +354,6 @@ weights_to_transpose = (
     "token_embedding.weight.trans",
 )
 
-
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
     print("Processing variable: ", name, " with shape: ", data.shape)
@@ -368,9 +368,17 @@ for name in list_vars.keys():
     # looks like the whisper models are in f16 by default
     # so we need to convert the small tensors to f32 until we fully support f16 in ggml
     # ftype == 0 -> float32, ftype == 1 -> float16
+
+    if name.endswith(weights_to_transpose):
+        print("  Transposing")
+        data = np.transpose(data)
+
+    if name == "decoder.token_embedding.weight.trans":
+        print("Shape before padding: ", data.shape, data.dtype)
+        data = np.pad(data, ((0, 0), (0, 3)), "constant", constant_values=0)
+        print("Shape after padding: ", data.shape, data.dtype)
+
     ftype = 1
-    if os.environ.get("GGML_USE_PF16") == "1":
-        ftype = 15
     if use_f16:
         if (
             n_dims < 2
@@ -383,30 +391,26 @@ for name in list_vars.keys():
             data = data.astype(np.float32)
             ftype = 0
         else:
-            if name.endswith(weights_to_pack):
+            if os.environ.get("GGML_USE_PF16") and name.endswith(weights_to_pack):
+                ftype = 15
                 print("  Converting to pfloat16")
+                print("Pre-packed shape: ", data.shape)
+                data = data.astype(np.float32)
                 data = pf16(data)
+                print("Post-packed shape: ", data.shape)
             else:
                 print("  Converting to float32")
                 data = data.astype(np.float32)
+                ftype = 0
     else:
         data = data.astype(np.float32)
         ftype = 0
 
-    if name.endswith(weights_to_transpose):
-        print("  Transposing")
-        data = np.transpose(data)
-
     # pad token embedding
     if name == "decoder.token_embedding.weight":
-        print("Shape before padding: ", data.shape)
+        print("Shape before padding: ", data.shape, data.dtype)
         data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
-        print("Shape after padding: ", data.shape)
-
-    if name == "decoder.token_embedding.weight.trans":
-        print("Shape before padding: ", data.shape)
-        data = np.pad(data, ((0, 0), (0, 3)), "constant", constant_values=0)
-        print("Shape after padding: ", data.shape)
+        print("Shape after padding: ", data.shape, data.dtype)
 
     # header
     str_ = name.encode("utf-8")

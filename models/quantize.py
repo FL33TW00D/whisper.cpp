@@ -2,6 +2,7 @@ import numpy as np
 from numba import jit
 from enum import Enum
 from tqdm import tqdm
+from iteration_utilities import grouper
 
 EXPORT_DIR = "."
 
@@ -128,22 +129,21 @@ def pf16(matrix):
     # Ensure matrix has even number of columns.
     assert N % 2 == 0
 
-    quantized_matrix = np.zeros((M, N // 2), dtype=np.uint32)
+    quantized_matrix = []
     matrix = matrix.astype(np.float16)
+    matrix = matrix.view(np.uint16)
+    matrix = matrix.flatten()
 
-    for i in tqdm(range(M)):
-        for j in range(0, N, 2):
-            float0 = np.uint16(matrix[i, j]) 
-            float1 = np.uint16(matrix[i, j + 1])
+    for chunk in grouper(matrix, 2):
+        float0 = chunk[0]
+        float1 = chunk[1]
+        packed_value = ((np.uint32(float1)) << 16) | np.uint32(float0)
+        quantized_matrix.append(packed_value)
 
-            # Pack two uint16 into a uint32
-            packed_value = (float1 << 16) | float0 
-
-            quantized_matrix[i, j // 2] = packed_value
-    return quantized_matrix 
+    quantized_matrix = np.array(quantized_matrix, dtype=np.uint32)
+    return quantized_matrix.reshape((M, N // 2))
 
 
-@jit(nopython=True)
 def dequant_pf16(matrix):
     """
     Dequantize a matrix of pf16 values to float32.
@@ -169,18 +169,31 @@ def dequant_pf16(matrix):
     for i in range(M):
         for j in range(0, N, 1):
             packed = matrix[i, j]
-            float2 = np.float32(packed >> 16)
-            float1 = np.float32(packed & 0xFFFF) 
-
+            half1 = np.array(packed & 0xFFFF, dtype=np.uint16).view(np.float16)
+            half2 = np.array((packed >> 16) & 0xFFFF, dtype=np.uint16).view(np.float16)
+            float1 = np.float32(half1)    # Convert to float32
+            float2 = np.float32(half2)    # Convert to float32
             dequantized_matrix[i, j * 2] = float1
             dequantized_matrix[i, j * 2 + 1] = float2
 
     return dequantized_matrix
 
 
-x = np.array([[1.0, 2.0, 3.0, 3.0],[4.0, 5.0, 6.0, 6.0]], dtype=np.float32)
-print(x)
-q = pf16(x)
-print(q)
-dq = dequant_pf16(q)
-print(dq)
+def validate():
+    x = np.array(
+        [
+            [0.1, -0.1, 0.5, -0.5],
+            [1.0, -1.0, 1.2, -1.2],
+            [0.1, -0.1, 0.5, -0.5],
+            [1.0, -1.0, 1.2, -1.2],
+        ],
+        dtype=np.float32,
+    )
+    print("Before Quant: \n", x)
+    q = pf16(x)
+    print("After Quant: \n", q)
+    dq = dequant_pf16(q)
+    print("After Dequant: \n", dq)
+
+
+validate()
