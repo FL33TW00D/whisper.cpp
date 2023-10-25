@@ -354,6 +354,19 @@ weights_to_transpose = (
     "token_embedding.weight.trans",
 )
 
+def write_to_file(fout, name, data, n_dims, ftype):
+    # header
+    str_ = name.encode("utf-8")
+    fout.write(struct.pack("iii", n_dims, len(str_), ftype))
+    for i in range(n_dims):
+        fout.write(struct.pack("i", data.shape[n_dims - 1 - i]))
+    fout.write(str_)
+
+    # data
+    data.tofile(fout)
+
+
+absmax = None
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
     print("Processing variable: ", name, " with shape: ", data.shape)
@@ -379,6 +392,7 @@ for name in list_vars.keys():
         print("Shape after padding: ", data.shape, data.dtype)
 
     ftype = 1
+    data = data.astype(np.float32)
     if use_f16:
         if (
             n_dims < 2
@@ -388,22 +402,24 @@ for name in list_vars.keys():
             or name == "decoder.positional_embedding"
         ):
             print("  Converting to float32")
-            data = data.astype(np.float32)
             ftype = 0
         else:
             if os.environ.get("GGML_USE_PF16") and name.endswith(weights_to_pack):
                 ftype = 15
                 print("  Converting to pfloat16")
                 print("Pre-packed shape: ", data.shape)
-                data = data.astype(np.float32)
                 data = pf16(data)
+                print("Post-packed shape: ", data.shape)
+            elif os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
+                ftype = 16
+                print("  Converting to q8g16")
+                print("Pre-packed shape: ", data.shape)
+                (data, absmax) = q8(data)
                 print("Post-packed shape: ", data.shape)
             else:
                 print("  Converting to float32")
-                data = data.astype(np.float32)
                 ftype = 0
     else:
-        data = data.astype(np.float32)
         ftype = 0
 
     # pad token embedding
@@ -412,15 +428,10 @@ for name in list_vars.keys():
         data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
         print("Shape after padding: ", data.shape, data.dtype)
 
-    # header
-    str_ = name.encode("utf-8")
-    fout.write(struct.pack("iii", n_dims, len(str_), ftype))
-    for i in range(n_dims):
-        fout.write(struct.pack("i", data.shape[n_dims - 1 - i]))
-    fout.write(str_)
-
-    # data
-    data.tofile(fout)
+    write_to_file(fout, name, data, n_dims, ftype)
+    if os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
+        print("  Writing absmax: ", absmax)
+        write_to_file(fout, name + ".absmax", absmax, n_dims, 16)
 
 fout.close()
 
