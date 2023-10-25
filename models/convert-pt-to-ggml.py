@@ -337,7 +337,6 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "token_embedding.weight.trans",
 )
 
 weights_to_transpose = (
