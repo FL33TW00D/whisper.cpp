@@ -321,11 +321,6 @@ for key in tokens:
     fout.write(struct.pack("i", len(key)))
     fout.write(key)
 
-list_vars["decoder.token_embedding.weight.trans"] = list_vars[
-    "decoder.token_embedding.weight"
-]
-print(list_vars["decoder.token_embedding.weight.trans"])
-
 weights_to_pack = (
     "attn.query.weight",
     "attn.key.weight",
@@ -337,7 +332,6 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "token_embedding.weight.trans",
 )
 
 weights_to_transpose = (
@@ -351,7 +345,6 @@ weights_to_transpose = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "token_embedding.weight.trans",
 )
 
 bias_size = 0
@@ -360,7 +353,6 @@ weight_size = 0
 other_size = 0
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
-    print("Processing variable: ", name, " with shape: ", data.shape)
 
     # reshape conv bias from [n] to [n, 1]
     if name in ["encoder.conv1.bias", "encoder.conv2.bias"]:
@@ -376,9 +368,10 @@ for name in list_vars.keys():
     if name.endswith(weights_to_transpose):
         data = np.transpose(data)
 
-    if name == "decoder.token_embedding.weight.trans":
+    # pad token embedding
+    if name == "decoder.token_embedding.weight":
         print("Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 0), (0, 3)), "constant", constant_values=0)
+        data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
         print("Shape after padding: ", data.shape, data.dtype)
 
     ftype = 1
@@ -403,12 +396,6 @@ for name in list_vars.keys():
     else:
         data = data.astype(np.float32)
         ftype = 0
-
-    # pad token embedding
-    if name == "decoder.token_embedding.weight":
-        print("Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
-        print("Shape after padding: ", data.shape, data.dtype)
 
     # header
     str_ = name.encode("utf-8")
