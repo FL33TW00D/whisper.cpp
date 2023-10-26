@@ -91,8 +91,8 @@ def q8(matrix, group_size=16):
 
     # [768, 768] -> [768, 192]
     quantized_matrix = np.zeros((M, N // pack_size), dtype=np.uint32)
-    print("quantized_matrix shape: ", quantized_matrix.shape)
     absmax_matrix = np.zeros((M, N // group_size), dtype=np.float32)
+    print("quantized_matrix shape: ", quantized_matrix.shape)
     print("absmax_matrix shape: ", absmax_matrix.shape)
 
     # Quantize the matrix values to sint8 and pack them into uint32

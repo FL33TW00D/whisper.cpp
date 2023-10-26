@@ -414,7 +414,8 @@ for name in list_vars.keys():
                 print("  Converting to q8g16")
                 print("Pre-packed shape: ", data.shape)
                 (data, absmax) = q8(data)
-                print("Post-packed shape: ", data.shape)
+                print("Packed shape: ", data.shape)
+                print("Packed absmax shape: ", absmax.shape)
             else:
                 print("  Converting to float32")
                 ftype = 0
