@@ -195,5 +195,3 @@ def validate():
     dq = dequant_pf16(q)
     print("After Dequant: \n", dq)
 
-
-validate()

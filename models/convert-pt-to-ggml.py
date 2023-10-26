@@ -354,6 +354,10 @@ weights_to_transpose = (
     "token_embedding.weight.trans",
 )
 
+bias_size = 0
+embedding_size = 0
+weight_size = 0
+other_size = 0
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
     print("Processing variable: ", name, " with shape: ", data.shape)
@@ -370,7 +374,6 @@ for name in list_vars.keys():
     # ftype == 0 -> float32, ftype == 1 -> float16
 
     if name.endswith(weights_to_transpose):
-        print("  Transposing")
         data = np.transpose(data)
 
     if name == "decoder.token_embedding.weight.trans":
@@ -387,19 +390,14 @@ for name in list_vars.keys():
             or name == "encoder.positional_embedding"
             or name == "decoder.positional_embedding"
         ):
-            print("  Converting to float32")
             data = data.astype(np.float32)
             ftype = 0
         else:
             if os.environ.get("GGML_USE_PF16") and name.endswith(weights_to_pack):
                 ftype = 15
-                print("  Converting to pfloat16")
-                print("Pre-packed shape: ", data.shape)
                 data = data.astype(np.float32)
                 data = pf16(data)
-                print("Post-packed shape: ", data.shape)
             else:
-                print("  Converting to float32")
                 data = data.astype(np.float32)
                 ftype = 0
     else:
@@ -420,9 +418,28 @@ for name in list_vars.keys():
     fout.write(str_)
 
     # data
+    if "bias" in name:
+        bias_size += data.nbytes
+    elif "embedding" in name:
+        embedding_size += data.nbytes
+    elif "weight" in name:
+        weight_size += data.nbytes
+    else:
+        other_size += data.nbytes
+
+    print(f"Writing {name} with shape {data.shape}, type {data.dtype} and bytes {data.nbytes}")
     data.tofile(fout)
 
 fout.close()
+
+#print summary
+print("")
+print("Summary:")
+print("  bias:      ", bias_size)
+print("  embedding: ", embedding_size)
+print("  weight:    ", weight_size)
+print("  other:     ", other_size)
+print("  total:     ", bias_size + embedding_size + weight_size + other_size)
 
 print("Done. Output file: ", fname_out)
 print("")
