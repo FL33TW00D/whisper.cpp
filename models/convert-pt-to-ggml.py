@@ -321,6 +321,11 @@ for key in tokens:
     fout.write(struct.pack("i", len(key)))
     fout.write(key)
 
+#we don't support transposed matmul so we bloat the model for the time being
+list_vars["decoder.token_embedding.weight.trans"] = list_vars[
+    "decoder.token_embedding.weight"
+]
+
 weights_to_pack = (
     "attn.query.weight",
     "attn.key.weight",
@@ -332,6 +337,8 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
+    "decoder.token_embedding.weight",
+    "decoder.token_embedding.weight.trans",
 )
 
 weights_to_transpose = (
@@ -345,12 +352,30 @@ weights_to_transpose = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
+    "decoder.token_embedding.weight.trans",
 )
+
+def write_to_file(fout, name, data, n_dims, ftype):
+    # header
+    str_ = name.encode("utf-8")
+    fout.write(struct.pack("iii", n_dims, len(str_), ftype))
+    for i in range(n_dims):
+        fout.write(struct.pack("i", data.shape[n_dims - 1 - i]))
+    fout.write(str_)
+
+    # data
+    data.tofile(fout)
 
 bias_size = 0
 embedding_size = 0
 weight_size = 0
 other_size = 0
+
+if os.environ.get("GGML_USE_PF16"):
+    print("Using PF16")
+if os.environ.get("GGML_USE_Q8G16"):
+    print("Using Q8G16")
+
 for name in list_vars.keys():
     data = list_vars[name].squeeze().numpy()
 
@@ -371,8 +396,14 @@ for name in list_vars.keys():
     # pad token embedding
     if name == "decoder.token_embedding.weight":
         print("Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
+        #TODO: is 1 ok here? 0 kills quant. maybe avg value
+        data = np.pad(data, ((0, 7), (0, 0)), "constant", constant_values=1)
         print("Shape after padding: ", data.shape, data.dtype)
+
+    if name == "decoder.token_embedding.weight.trans":
+        print("Trans Shape before padding: ", data.shape, data.dtype)
+        data = np.pad(data, ((0, 0), (0, 7)), "constant", constant_values=1)
+        print("Trans Shape after padding: ", data.shape, data.dtype)
 
     ftype = 1
     if use_f16:
@@ -390,19 +421,20 @@ for name in list_vars.keys():
                 ftype = 15
                 data = data.astype(np.float32)
                 data = pf16(data)
+            elif os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
+                ftype = 16
+                print("Converting to q8g16")
+                print("Pre-packed shape: ", data.shape)
+                data = data.astype(np.float32)
+                (data, absmax) = q8(data)
+                print("Packed shape: ", data.shape)
+                print("Packed absmax shape: ", absmax.shape)
             else:
                 data = data.astype(np.float32)
                 ftype = 0
     else:
         data = data.astype(np.float32)
         ftype = 0
-
-    # header
-    str_ = name.encode("utf-8")
-    fout.write(struct.pack("iii", n_dims, len(str_), ftype))
-    for i in range(n_dims):
-        fout.write(struct.pack("i", data.shape[n_dims - 1 - i]))
-    fout.write(str_)
 
     # data
     if "bias" in name:
@@ -415,7 +447,10 @@ for name in list_vars.keys():
         other_size += data.nbytes
 
     print(f"Writing {name} with shape {data.shape}, type {data.dtype} and bytes {data.nbytes}")
-    data.tofile(fout)
+    write_to_file(fout, name, data, n_dims, ftype)
+    if os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
+        print(f"Writing {name}.absmax with shape {absmax.shape}, type {absmax.dtype} and bytes {absmax.nbytes}")
+        write_to_file(fout, name + ".absmax", absmax, n_dims, 0)
 
 fout.close()
 
