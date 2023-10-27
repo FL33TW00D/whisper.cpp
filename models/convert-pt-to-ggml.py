@@ -450,7 +450,16 @@ for name in list_vars.keys():
     write_to_file(fout, name, data, n_dims, ftype)
     if os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
         print(f"Writing {name}.absmax with shape {absmax.shape}, type {absmax.dtype} and bytes {absmax.nbytes}")
+        print("Ndims: ", n_dims)
         write_to_file(fout, name + ".absmax", absmax, n_dims, 0)
+        if "bias" in name:
+            bias_size += absmax.nbytes
+        elif "embedding" in name:
+            embedding_size += absmax.nbytes
+        elif "weight" in name:
+            weight_size += absmax.nbytes
+        else:
+            other_size += absmax.nbytes
 
 fout.close()
 

@@ -61,7 +61,7 @@ def q4(matrix):
 
     return (quantized_matrix, absmax_matrix)
 
-
+@jit(nopython=True)
 def q8(matrix, group_size=16):
     """
     Quantize a matrix of float32 values to sint8.
@@ -83,7 +83,6 @@ def q8(matrix, group_size=16):
     pack_size = 4 # 4u8 -> 1u32
     assert N % pack_size == 0
     assert N % group_size == 0
-    assert matrix.dtype == np.float32
 
     # [768, 768] -> [768, 192]
     quantized_matrix = np.zeros((M, N // pack_size), dtype=np.uint32)

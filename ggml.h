@@ -302,7 +302,8 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_K = 12, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_K = 13, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q6_K = 14, // except 1d tensors
-        GGML_FTYPE_PACKED_F16 = 15   // 2xF16 packed into U32
+        GGML_FTYPE_PACKED_F16 = 15,   // 2xF16 packed into U32
+        GGML_FTYPE_MOSTLY_Q8G16 = 16   // 2xF16 packed into U32
     };
 
     // available tensor operations:
