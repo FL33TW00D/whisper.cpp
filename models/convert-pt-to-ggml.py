@@ -337,8 +337,7 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "decoder.token_embedding.weight",
-    "decoder.token_embedding.weight.trans",
+    #"token_embedding.weight.trans",
 )
 
 weights_to_transpose = (
@@ -352,7 +351,7 @@ weights_to_transpose = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "decoder.token_embedding.weight.trans",
+    "token_embedding.weight.trans",
 )
 
 def write_to_file(fout, name, data, n_dims, ftype):
@@ -396,13 +395,12 @@ for name in list_vars.keys():
     # pad token embedding
     if name == "decoder.token_embedding.weight":
         print("Shape before padding: ", data.shape, data.dtype)
-        #TODO: is 1 ok here? 0 kills quant. maybe avg value
-        data = np.pad(data, ((0, 7), (0, 0)), "constant", constant_values=1)
+        data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
         print("Shape after padding: ", data.shape, data.dtype)
 
     if name == "decoder.token_embedding.weight.trans":
         print("Trans Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 0), (0, 7)), "constant", constant_values=1)
+        data = np.pad(data, ((0, 0), (0, 3)), "constant", constant_values=0)
         print("Trans Shape after padding: ", data.shape, data.dtype)
 
     ftype = 1
@@ -424,11 +422,10 @@ for name in list_vars.keys():
             elif os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
                 ftype = 16
                 print("Converting to q8g16")
-                print("Pre-packed shape: ", data.shape)
                 data = data.astype(np.float32)
                 (data, absmax) = q8(data)
-                print("Packed shape: ", data.shape)
-                print("Packed absmax shape: ", absmax.shape)
+                print("Quantized data: ", data)
+                print("Quantized absmax: ", absmax)
             else:
                 data = data.astype(np.float32)
                 ftype = 0
@@ -450,7 +447,6 @@ for name in list_vars.keys():
     write_to_file(fout, name, data, n_dims, ftype)
     if os.environ.get("GGML_USE_Q8G16") and name.endswith(weights_to_pack):
         print(f"Writing {name}.absmax with shape {absmax.shape}, type {absmax.dtype} and bytes {absmax.nbytes}")
-        print("Ndims: ", n_dims)
         write_to_file(fout, name + ".absmax", absmax, n_dims, 0)
         if "bias" in name:
             bias_size += absmax.nbytes

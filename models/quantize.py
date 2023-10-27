@@ -82,7 +82,7 @@ def q8(matrix, group_size=16):
     N = matrix.shape[1]
     pack_size = 4 # 4u8 -> 1u32
     assert N % pack_size == 0
-    assert N % group_size == 0
+    #assert N % group_size == 0 #this doesn't actually need to be true
 
     # [768, 768] -> [768, 192]
     quantized_matrix = np.zeros((M, N // pack_size), dtype=np.uint32)
@@ -96,6 +96,8 @@ def q8(matrix, group_size=16):
         for j in range(0, N, pack_size):
             if j % group_size == 0:
                 local_absmax = np.max(np.abs(matrix[i, j : j + group_size]))
+                if local_absmax == 0:
+                    local_absmax = 1
                 absmax_matrix[i, j // group_size] = local_absmax
             packed_value = (
                 (round(matrix[i, j] / local_absmax * 127) & 0xFF)
@@ -228,10 +230,12 @@ def validate_pf16():
 
 def validate_q8():
     np.set_printoptions(threshold=100000, linewidth=100000, suppress=True, precision=2)
-    x = np.random.standard_normal(size=(32,96)).astype(np.float32)
+    x = np.random.standard_normal(size=(32,32)).astype(np.float32)
     print("Before Quant: \n", x)
     (quantized, absmax) = q8(x)
-    print("After Quant: \n", quantized)
     print("Abs max: \n", absmax)
     dq = dequant_q8(quantized, absmax)
     print("After Dequant: \n", dq)
+    print("Max diff: ", np.max(np.abs(x - dq)))
+
+#validate_q8()
