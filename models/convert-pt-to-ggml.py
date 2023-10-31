@@ -321,10 +321,11 @@ for key in tokens:
     fout.write(struct.pack("i", len(key)))
     fout.write(key)
 
-#we don't support transposed matmul so we bloat the model for the time being
+"""
 list_vars["decoder.token_embedding.weight.trans"] = list_vars[
     "decoder.token_embedding.weight"
 ]
+"""
 
 weights_to_pack = (
     "attn.query.weight",
@@ -337,7 +338,7 @@ weights_to_pack = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    #"token_embedding.weight.trans",
+    "token_embedding.weight",
 )
 
 weights_to_transpose = (
@@ -351,7 +352,6 @@ weights_to_transpose = (
     "cross_attn.out.weight",
     "mlp.0.weight",
     "mlp.2.weight",
-    "token_embedding.weight.trans",
 )
 
 def write_to_file(fout, name, data, n_dims, ftype):
@@ -370,12 +370,17 @@ embedding_size = 0
 weight_size = 0
 other_size = 0
 
+pad_size = 7
+"""
 if os.environ.get("GGML_USE_PF16"):
     print("Using PF16")
 if os.environ.get("GGML_USE_Q8G16"):
     print("Using Q8G16")
+    pad_size = 7
+"""
 
 for name in list_vars.keys():
+    print("Processing variable: ", name)
     data = list_vars[name].squeeze().numpy()
 
     # reshape conv bias from [n] to [n, 1]
@@ -395,12 +400,12 @@ for name in list_vars.keys():
     # pad token embedding
     if name == "decoder.token_embedding.weight":
         print("Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 3), (0, 0)), "constant", constant_values=0)
+        data = np.pad(data, ((0, pad_size), (0, 0)), "constant", constant_values=0)
         print("Shape after padding: ", data.shape, data.dtype)
 
     if name == "decoder.token_embedding.weight.trans":
         print("Trans Shape before padding: ", data.shape, data.dtype)
-        data = np.pad(data, ((0, 0), (0, 3)), "constant", constant_values=0)
+        data = np.pad(data, ((0, 0), (0, pad_size)), "constant", constant_values=0)
         print("Trans Shape after padding: ", data.shape, data.dtype)
 
     ftype = 1

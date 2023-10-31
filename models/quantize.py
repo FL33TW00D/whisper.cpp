@@ -231,11 +231,11 @@ def validate_pf16():
 def validate_q8():
     np.set_printoptions(threshold=100000, linewidth=100000, suppress=True, precision=2)
     x = np.random.standard_normal(size=(32,32)).astype(np.float32)
-    print("Before Quant: \n", x)
+    print("Input data: ", x)
     (quantized, absmax) = q8(x)
-    print("Abs max: \n", absmax)
+    print("Absmax: ", absmax)
     dq = dequant_q8(quantized, absmax)
-    print("After Dequant: \n", dq)
+    print("Dequantized data: ", dq)
     print("Max diff: ", np.max(np.abs(x - dq)))
 
 #validate_q8()
